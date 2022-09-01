@@ -70,7 +70,10 @@ function subject(): Subject {
   };
 }
 
-const numBrain = 256;
+const width = 500;
+const height = 300;
+const ballSpeed = 11;
+const numBrain = 1000;
 const numTestPerBrain = 100;
 let subjects: Subject[];
 const bestScores: number[] = [];
@@ -108,16 +111,15 @@ function next(hit: boolean, failed: boolean) {
       }
     }
     reset();
-    const halfWidth = canvas.width / 2;
-    const halfHeight = canvas.height / 2;
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
     const [brainAnswer] = think(subjects[brainNum].brain, [
       (target.x - halfWidth) / halfWidth,
       (target.y - halfHeight) / halfHeight,
     ]);
-    const a = (((brainAnswer + 1) / 2) * PI) / 2 - PI / 2;
-    const speed = 14;
-    ball.vx = cos(a) * speed;
-    ball.vy = sin(a) * speed;
+    const a = brainAnswer * PI;
+    ball.vx = cos(a) * ballSpeed;
+    ball.vy = sin(a) * ballSpeed;
   }
   return status;
 }
@@ -125,16 +127,16 @@ function next(hit: boolean, failed: boolean) {
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
 
-const ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 16, colour: "#000" };
-const target = { x: 0, y: 0, radius: 16, colour: "#a00" };
+const ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 4, colour: "#000" };
+const target = { x: 0, y: 0, radius: 8, colour: "#a00" };
 
 function reset() {
   ball.x = 0;
-  ball.y = canvas.height;
+  ball.y = height;
   ball.vx = 0;
   ball.vy = 0;
-  target.x = rn() * canvas.width;
-  target.y = rn() * canvas.height;
+  target.x = rn() * width;
+  target.y = rn() * height;
   target.colour = "#a00";
 }
 
@@ -150,13 +152,19 @@ function display() {
   //Clear background
   ctx.fillStyle = "rgba(255, 255, 255, .1)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  //Draw box
+  ctx.strokeStyle = "#000";
+  ctx.strokeRect(0, canvas.height - height, width, height);
   //Draw line chart
   ctx.strokeStyle = "#000";
   ctx.lineWidth = 1;
   ctx.moveTo(canvas.width, 0);
   ctx.beginPath();
   bestScores.forEach((score, i) => {
-    ctx.lineTo(i * 4, canvas.height - ((canvas.height / numTestPerBrain) * score));
+    ctx.lineTo(
+      i * 4,
+      height - (height / numTestPerBrain) * score - (height - canvas.height)
+    );
   });
   ctx.stroke();
   //Draw ball and target
@@ -164,7 +172,7 @@ function display() {
   objects.forEach(({ x, y, radius, colour }) => {
     ctx.fillStyle = colour;
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, PI * 2);
+    ctx.arc(x, y - (height - canvas.height), radius, 0, PI * 2);
     ctx.fill();
   });
   //Draw info
@@ -186,14 +194,17 @@ function display() {
   setTimeout(display, 10);
 }
 
+let slowMode = false;
 function work() {
   for (let i = 0; i < 100000; ++i) {
+    if (slowMode && i && !brainNum) {
+      break;
+    }
     ball.x += ball.vx;
     ball.y += ball.vy;
     ball.vy += 0.1;
     const targetHit = isColliding(ball, target);
-    const wallHit =
-      ball.x + ball.radius > canvas.width || ball.y > canvas.height;
+    const wallHit = Math.abs(ball.x) + ball.radius > width || ball.y > height;
     const status = next(targetHit, wallHit);
     if (status == "test") {
       didHit = false;

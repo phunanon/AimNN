@@ -51,7 +51,10 @@ function subject() {
         brain: mutant(brain(numInput, numLayer, neuronsPerLayer))
     };
 }
-var numBrain = 256;
+var width = 500;
+var height = 300;
+var ballSpeed = 11;
+var numBrain = 1000;
 var numTestPerBrain = 100;
 var subjects;
 var bestScores = [];
@@ -87,30 +90,29 @@ function next(hit, failed) {
             }
         }
         reset();
-        var halfWidth = canvas.width / 2;
-        var halfHeight = canvas.height / 2;
+        var halfWidth = width / 2;
+        var halfHeight = height / 2;
         var brainAnswer = think(subjects[brainNum].brain, [
             (target.x - halfWidth) / halfWidth,
             (target.y - halfHeight) / halfHeight,
         ])[0];
-        var a = (((brainAnswer + 1) / 2) * PI) / 2 - PI / 2;
-        var speed = 14;
-        ball.vx = cos(a) * speed;
-        ball.vy = sin(a) * speed;
+        var a = brainAnswer * PI;
+        ball.vx = cos(a) * ballSpeed;
+        ball.vy = sin(a) * ballSpeed;
     }
     return status;
 }
 var canvas;
 var ctx;
-var ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 16, colour: "#000" };
-var target = { x: 0, y: 0, radius: 16, colour: "#a00" };
+var ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 4, colour: "#000" };
+var target = { x: 0, y: 0, radius: 8, colour: "#a00" };
 function reset() {
     ball.x = 0;
-    ball.y = canvas.height;
+    ball.y = height;
     ball.vx = 0;
     ball.vy = 0;
-    target.x = rn() * canvas.width;
-    target.y = rn() * canvas.height;
+    target.x = rn() * width;
+    target.y = rn() * height;
     target.colour = "#a00";
 }
 function isColliding(a, b) {
@@ -121,13 +123,16 @@ function display() {
     //Clear background
     ctx.fillStyle = "rgba(255, 255, 255, .1)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    //Draw box
+    ctx.strokeStyle = "#000";
+    ctx.strokeRect(0, canvas.height - height, width, height);
     //Draw line chart
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1;
     ctx.moveTo(canvas.width, 0);
     ctx.beginPath();
     bestScores.forEach(function (score, i) {
-        ctx.lineTo(i * 4, canvas.height - ((canvas.height / numTestPerBrain) * score));
+        ctx.lineTo(i * 4, height - (height / numTestPerBrain) * score - (height - canvas.height));
     });
     ctx.stroke();
     //Draw ball and target
@@ -136,7 +141,7 @@ function display() {
         var x = _a.x, y = _a.y, radius = _a.radius, colour = _a.colour;
         ctx.fillStyle = colour;
         ctx.beginPath();
-        ctx.arc(x, y, radius, 0, PI * 2);
+        ctx.arc(x, y - (height - canvas.height), radius, 0, PI * 2);
         ctx.fill();
     });
     //Draw info
@@ -149,13 +154,17 @@ function display() {
     ctx.fillRect(0, 8, canvas.width / (numTestPerBrain / testNum), 8);
     setTimeout(display, 10);
 }
+var slowMode = false;
 function work() {
     for (var i = 0; i < 100000; ++i) {
+        if (slowMode && i && !brainNum) {
+            break;
+        }
         ball.x += ball.vx;
         ball.y += ball.vy;
         ball.vy += 0.1;
         var targetHit = isColliding(ball, target);
-        var wallHit = ball.x + ball.radius > canvas.width || ball.y > canvas.height;
+        var wallHit = Math.abs(ball.x) + ball.radius > width || ball.y > height;
         var status_1 = next(targetHit, wallHit);
         if (status_1 == "test") {
             didHit = false;
