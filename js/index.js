@@ -12,7 +12,7 @@ var rng = new RNG("...");
 var rng2 = new RNG("...");
 var rn2 = function () { return rng2.uniform(); };
 var rn = function () { return rng.uniform(); };
-var vec = function (n) { return __spreadArray([], Array(n), true).map(function (n) { return 0; }); };
+var vec = function (n) { return __spreadArray([], Array(n), true).map(function () { return 0; }); };
 function brain(inputs, layers, neuronsPerLayer) {
     return __spreadArray([
         vec(inputs).map(function (n) { return ({ bias: 0, weights: vec(neuronsPerLayer) }); })
@@ -53,32 +53,34 @@ function subject() {
 }
 var width = 500;
 var height = 300;
+var lineChartSegmentWidth = 4;
 var ballSpeed = 11;
 var numBrain = 1000;
 var numTestPerBrain = 100;
-var subjects;
+var subjects = vec(numBrain).map(subject);
 var bestScores = [];
 var generationNum = 0;
 var brainNum = 0;
 var testNum = 0;
-var didHit = false;
+var hits = [];
 function next(hit, failed) {
-    var status = "nothing";
     if (hit) {
         ++subjects[brainNum].score;
     }
     if (hit || failed) {
         ++testNum;
-        status = "test";
         if (testNum == numTestPerBrain) {
             testNum = 0;
             ++brainNum;
-            status = "brain";
             rng = new RNG("...");
+            hits = [];
             if (brainNum == subjects.length) {
                 subjects.sort(function (a, b) { return b.score - a.score; });
                 var parent_1 = subjects[0];
                 bestScores.push(parent_1.score);
+                if (bestScores.length > width / lineChartSegmentWidth) {
+                    bestScores.shift();
+                }
                 subjects = __spreadArray([
                     { score: 0, brain: parent_1.brain }
                 ], vec(numBrain - 1).map(function (n) { return ({
@@ -100,10 +102,7 @@ function next(hit, failed) {
         ball.vx = cos(a) * ballSpeed;
         ball.vy = sin(a) * ballSpeed;
     }
-    return status;
 }
-var canvas;
-var ctx;
 var ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 4, colour: "#000" };
 var target = { x: 0, y: 0, radius: 8, colour: "#a00" };
 function reset() {
@@ -119,22 +118,43 @@ function isColliding(a, b) {
     var distance = sqrt(Math.pow((a.x - b.x), 2) + Math.pow((a.y - b.y), 2));
     return distance < a.radius + b.radius;
 }
-function display() {
+var info = [
+    "This is an example of a genetic/evolutionary algorithm",
+    "",
+    "1000 brains are being tested 100 times each",
+    "The best is cloned and randomly mutated 999x for the next generation",
+    "Each brain has neurons: 2 input (x, y), 6 hidden, 1 output (angle)",
+    "",
+    "Click / tap to watch in real-time",
+    "",
+    "It's impressive because this is the equation it intuits:",
+];
+function display(canvas, ctx, equation) {
+    var _a;
     //Clear background
     ctx.fillStyle = "rgba(255, 255, 255, .1)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     //Draw box
-    ctx.strokeStyle = "#000";
+    ctx.strokeStyle = "#aaa";
     ctx.strokeRect(0, canvas.height - height, width, height);
     //Draw line chart
-    ctx.strokeStyle = "#000";
+    ctx.strokeStyle = "#4a4";
     ctx.lineWidth = 1;
     ctx.moveTo(canvas.width, 0);
     ctx.beginPath();
     bestScores.forEach(function (score, i) {
-        ctx.lineTo(i * 4, height - (height / numTestPerBrain) * score - (height - canvas.height));
+        ctx.lineTo(i * lineChartSegmentWidth, height - (height / numTestPerBrain) * score - (height - canvas.height));
     });
     ctx.stroke();
+    //Draw info
+    ctx.fillStyle = "#222";
+    info.map(function (text, i) {
+        ctx.fillText(text, 10, 128 + i * 16);
+    });
+    ctx.drawImage(equation, 10, 270, 378 * 0.8, 68 * 0.8);
+    ctx.fillText("Generation ".concat(generationNum + 1), canvas.width / 2 - 32, 64);
+    var bestScore = (_a = bestScores[bestScores.length - 1]) !== null && _a !== void 0 ? _a : 0;
+    ctx.fillText("Best accuracy: ".concat(bestScore, "%"), canvas.width / 2 - 32, 80);
     //Draw ball and target
     var objects = [ball, target];
     objects.forEach(function (_a) {
@@ -144,15 +164,14 @@ function display() {
         ctx.arc(x, y - (height - canvas.height), radius, 0, PI * 2);
         ctx.fill();
     });
-    //Draw info
-    ctx.fillStyle = "black";
-    ctx.fillText("Generation ".concat(generationNum + 1), canvas.width / 2 - 32, canvas.height / 2);
-    ctx.fillText("Best score: ".concat(bestScores[bestScores.length - 1], " / ").concat(numTestPerBrain), canvas.width / 2 - 32, canvas.height / 2 + 16);
     //Draw bars
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width / (subjects.length / brainNum), 8);
-    ctx.fillStyle = didHit ? "green" : "red";
-    ctx.fillRect(0, 8, canvas.width / (numTestPerBrain / testNum), 8);
-    setTimeout(display, 10);
+    var segmentWidth = canvas.width / numTestPerBrain;
+    hits.forEach(function (hit, i) {
+        ctx.fillStyle = hit ? "green" : "red";
+        ctx.fillRect(i * segmentWidth, 8, segmentWidth, 8);
+    });
 }
 var slowMode = false;
 function work() {
@@ -164,23 +183,24 @@ function work() {
         ball.y += ball.vy;
         ball.vy += 0.1;
         var targetHit = isColliding(ball, target);
-        var wallHit = Math.abs(ball.x) + ball.radius > width || ball.y > height;
-        var status_1 = next(targetHit, wallHit);
-        if (status_1 == "test") {
-            didHit = false;
-        }
-        if (targetHit) {
-            didHit = true;
-        }
+        var wallHit = Math.abs(ball.x) - target.radius * 2 > target.x || ball.y > height;
+        if (targetHit)
+            hits.push(true);
+        if (wallHit)
+            hits.push(false);
+        next(targetHit, wallHit);
     }
-    setTimeout(work, 10);
+    if (bestScores[bestScores.length - 1] === numTestPerBrain) {
+        slowMode = true;
+    }
 }
 function DomLoad() {
-    canvas = document.querySelector("canvas");
-    ctx = canvas.getContext("2d");
-    subjects = vec(numBrain).map(subject);
+    var canvas = document.querySelector("canvas");
+    var ctx = canvas.getContext("2d");
+    var equation = document.querySelector("img");
+    ctx.font = "12px monospace";
     reset();
-    display();
-    work();
+    setInterval(function () { return display(canvas, ctx, equation); }, 10);
+    setInterval(work, 10);
 }
 //# sourceMappingURL=index.js.map

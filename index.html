@@ -2,15 +2,21 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-    <title>Aiming NN</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=0.75, maximum-scale=1.0"
+    />
+    <title>Aim NN</title>
     <style>
       * {
         margin: 0;
         padding: 0;
       }
       canvas {
-        border: .1rem solid #000;
+        border: 0.1rem solid #000;
+      }
+      img {
+        display: none;
       }
     </style>
     <script src="js/rng.js"></script>
@@ -18,5 +24,6 @@
   </head>
   <body onload="DomLoad()">
     <canvas width="500" height="740" onclick="slowMode = !slowMode"></canvas>
+    <img src="Projectile motion - Wikipedia.png" />
   </body>
 </html>

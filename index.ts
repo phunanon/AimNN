@@ -22,7 +22,7 @@ type Subject = {
   score: number;
 };
 
-const vec = (n: number) => [...Array(n)].map((n) => 0);
+const vec = (n: number) => [...Array(n)].map(() => 0);
 
 function brain(inputs: number, layers: number, neuronsPerLayer: number): Brain {
   return [
@@ -72,33 +72,35 @@ function subject(): Subject {
 
 const width = 500;
 const height = 300;
+const lineChartSegmentWidth = 4;
 const ballSpeed = 11;
 const numBrain = 1000;
 const numTestPerBrain = 100;
-let subjects: Subject[];
+let subjects = vec(numBrain).map(subject);
 const bestScores: number[] = [];
 let generationNum = 0;
 let brainNum = 0;
 let testNum = 0;
-let didHit = false;
+let hits: boolean[] = [];
 
 function next(hit: boolean, failed: boolean) {
-  let status: "nothing" | "test" | "brain" = "nothing";
   if (hit) {
     ++subjects[brainNum].score;
   }
   if (hit || failed) {
     ++testNum;
-    status = "test";
     if (testNum == numTestPerBrain) {
       testNum = 0;
       ++brainNum;
-      status = "brain";
       rng = new RNG("...");
+      hits = [];
       if (brainNum == subjects.length) {
         subjects.sort((a, b) => b.score - a.score);
         const parent = subjects[0];
         bestScores.push(parent.score);
+        if (bestScores.length > width / lineChartSegmentWidth) {
+          bestScores.shift();
+        }
         subjects = [
           { score: 0, brain: parent.brain },
           ...vec(numBrain - 1).map((n) => ({
@@ -121,11 +123,7 @@ function next(hit: boolean, failed: boolean) {
     ball.vx = cos(a) * ballSpeed;
     ball.vy = sin(a) * ballSpeed;
   }
-  return status;
 }
-
-let canvas: HTMLCanvasElement;
-let ctx: CanvasRenderingContext2D;
 
 const ball = { x: 0, y: 0, vx: 0, vy: 0, radius: 4, colour: "#000" };
 const target = { x: 0, y: 0, radius: 8, colour: "#a00" };
@@ -148,25 +146,50 @@ function isColliding(
   return distance < a.radius + b.radius;
 }
 
-function display() {
+const info = [
+  "This is an example of a genetic/evolutionary algorithm",
+  "",
+  "1000 brains are being tested 100 times each",
+  "The best is cloned and randomly mutated 999x for the next generation",
+  "Each brain has neurons: 2 input (x, y), 6 hidden, 1 output (angle)",
+  "",
+  "Click / tap to watch in real-time",
+  "",
+  "It's impressive because this is the equation it intuits:",
+];
+
+function display(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  equation: HTMLImageElement
+) {
   //Clear background
   ctx.fillStyle = "rgba(255, 255, 255, .1)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   //Draw box
-  ctx.strokeStyle = "#000";
+  ctx.strokeStyle = "#aaa";
   ctx.strokeRect(0, canvas.height - height, width, height);
   //Draw line chart
-  ctx.strokeStyle = "#000";
+  ctx.strokeStyle = "#4a4";
   ctx.lineWidth = 1;
   ctx.moveTo(canvas.width, 0);
   ctx.beginPath();
   bestScores.forEach((score, i) => {
     ctx.lineTo(
-      i * 4,
+      i * lineChartSegmentWidth,
       height - (height / numTestPerBrain) * score - (height - canvas.height)
     );
   });
   ctx.stroke();
+  //Draw info
+  ctx.fillStyle = "#222";
+  info.map((text, i) => {
+    ctx.fillText(text, 10, 128 + i * 16);
+  });
+  ctx.drawImage(equation, 10, 270, 378 * 0.8, 68 * 0.8);
+  ctx.fillText(`Generation ${generationNum + 1}`, canvas.width / 2 - 32, 64);
+  const bestScore = bestScores[bestScores.length - 1] ?? 0;
+  ctx.fillText(`Best accuracy: ${bestScore}%`, canvas.width / 2 - 32, 80);
   //Draw ball and target
   const objects = [ball, target];
   objects.forEach(({ x, y, radius, colour }) => {
@@ -175,23 +198,14 @@ function display() {
     ctx.arc(x, y - (height - canvas.height), radius, 0, PI * 2);
     ctx.fill();
   });
-  //Draw info
-  ctx.fillStyle = "black";
-  ctx.fillText(
-    `Generation ${generationNum + 1}`,
-    canvas.width / 2 - 32,
-    canvas.height / 2
-  );
-  ctx.fillText(
-    `Best score: ${bestScores[bestScores.length - 1]} / ${numTestPerBrain}`,
-    canvas.width / 2 - 32,
-    canvas.height / 2 + 16
-  );
   //Draw bars
+  ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, canvas.width / (subjects.length / brainNum), 8);
-  ctx.fillStyle = didHit ? "green" : "red";
-  ctx.fillRect(0, 8, canvas.width / (numTestPerBrain / testNum), 8);
-  setTimeout(display, 10);
+  const segmentWidth = canvas.width / numTestPerBrain;
+  hits.forEach((hit, i) => {
+    ctx.fillStyle = hit ? "green" : "red";
+    ctx.fillRect(i * segmentWidth, 8, segmentWidth, 8);
+  });
 }
 
 let slowMode = false;
@@ -204,23 +218,23 @@ function work() {
     ball.y += ball.vy;
     ball.vy += 0.1;
     const targetHit = isColliding(ball, target);
-    const wallHit = Math.abs(ball.x) + ball.radius > width || ball.y > height;
-    const status = next(targetHit, wallHit);
-    if (status == "test") {
-      didHit = false;
-    }
-    if (targetHit) {
-      didHit = true;
-    }
+    const wallHit =
+      Math.abs(ball.x) - target.radius * 2 > target.x || ball.y > height;
+    if (targetHit) hits.push(true);
+    if (wallHit) hits.push(false);
+    next(targetHit, wallHit);
   }
-  setTimeout(work, 10);
+  if (bestScores[bestScores.length - 1] === numTestPerBrain) {
+    slowMode = true;
+  }
 }
 
 function DomLoad() {
-  canvas = document.querySelector("canvas")!;
-  ctx = canvas.getContext("2d")!;
-  subjects = vec(numBrain).map(subject);
+  const canvas = document.querySelector("canvas")!;
+  const ctx = canvas.getContext("2d")!;
+  const equation = document.querySelector("img")!;
+  ctx.font = "12px monospace";
   reset();
-  display();
-  work();
+  setInterval(() => display(canvas, ctx, equation), 10);
+  setInterval(work, 10);
 }
